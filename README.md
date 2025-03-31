@@ -3,7 +3,7 @@
 Python library for processing Kik-Net ground motions and interacting with Albert Kottke's pyStrata package [pystrata](https://github.com/arkottke/pystrata).
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![YouTube](hhttps://www.youtube.com/playlist?list=PLDJOjJHvPIGwjSnY3X_1JczhZWMNXdyZa)
+[![YouTube Playlist](https://img.shields.io/badge/Watch_My_Playlist-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/playlist?list=PLDJOjJHvPIGwjSnY3X_1JczhZWMNXdyZa)
 
 
 ## Introduction

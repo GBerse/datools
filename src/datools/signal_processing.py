@@ -833,4 +833,220 @@ def save_seismic_data(stream, base_path, station_code, formats=("MSEED",),
     print(f"Saved data for station {station_code} in {len(formats)} format(s) to:")
     print(f"  {output_dir}")
 
+# ------------------
+# Simple Plotting Functions
+# ------------------
+
+def plotstream(stream):
+    if not stream:
+        print("The stream is empty.")
+        return
+
+    # Creating one big plot with everything
+    n_subplots = len(stream)
+
+    # Breaking it up into a square of subplots. In other words, ceil looks at smallest value
+    n_cols = int(np.ceil(np.sqrt(n_subplots)))
+    n_rows = int(np.ceil(n_subplots / n_cols))
+
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(15, 10))  # Make the figure size square
+
+    # Flattening the matrix of subplots into a flat list for easier processing
+    if n_rows > 1 or n_cols > 1:
+        axs = axs.flatten()
+    else:
+        axs = [axs]  # Ensure axs is always an iterable
+
+    # Initializing a blank list for the PGA values
+    pgas = []
+
+    # Actually plotting the data
+    for ii in range(len(stream)):
+        # Extract metadata
+        start_time = stream[ii].stats.starttime
+        site_id = stream[ii].stats.station  # Assuming the site ID is stored in the station attribute
+        date_str = start_time.strftime('%Y-%m-%d')
+
+        # Set title to site ID and date
+        axs[ii].set_title(f'{site_id} - {date_str}', fontsize=10)  # Title with site ID and date
+
+        # Logging the PGA
+        pga = np.max(np.abs(stream[ii].data))
+        pgas.append(pga)
+
+        # Plotting time history
+        axs[ii].plot(stream[ii].times(), stream[ii].data, label='Full Time History')
+
+        # Making Subplot axis labels
+        axs[ii].set_xlabel('Time [s]', fontsize=8)
+        axs[ii].set_ylabel('Acceleration [g]', fontsize=8)
+
+        # Gridlines
+        axs[ii].grid(which='both', color='gray', linestyle='-', linewidth=0.25)
+
+        # Adding the PGAs
+        axs[ii].text(0.95, 0.95, f'Max: {pga:.4f} g', transform=axs[ii].transAxes,
+                     fontsize=8, verticalalignment='top', horizontalalignment='right',
+                     bbox=dict(facecolor='white', alpha=0.5))
+
+    # Hide excess subplots
+    for ax in axs[n_subplots:]:
+        ax.set_visible(False)
+
+    # Adjust layout
+    plt.tight_layout(rect=[0, 0, 1, 0.96])  # Make space for the suptitle
+    plt.subplots_adjust(top=0.92, bottom=0.08, left=0.10, right=0.95, hspace=0.5, wspace=0.5)
+
+    # Title
+    plt.suptitle(f'Time Histories)')
+
+    # Show the plot
+    plt.show()
+
+def plotstream_vels(stream):
+    if not stream:
+        print("The stream is empty.")
+        return
+
+    # Creating one big plot with everything
+    n_subplots = len(stream)
+
+    # Breaking it up into a square of subplots. In other words, ceil looks at smallest value
+    n_cols = int(np.ceil(np.sqrt(n_subplots)))
+    n_rows = int(np.ceil(n_subplots / n_cols))
+
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(15, 10))  # Make the figure size square
+
+    # Flattening the matrix of subplots into a flat list for easier processing
+    if n_rows > 1 or n_cols > 1:
+        axs = axs.flatten()
+    else:
+        axs = [axs]  # Ensure axs is always an iterable
+
+    # Initializing a blank list for the PGV values
+    pgvs = []
+
+    # Actually plotting the data
+    for ii in range(len(stream)):
+        # Extract metadata
+        start_time = stream[ii].stats.starttime
+        site_id = stream[ii].stats.station  # Assuming the site ID is stored in the station attribute
+        date_str = start_time.strftime('%Y-%m-%d')
+        time_str = start_time.strftime('%H:%M:%S')
+        location = stream[ii].stats.location
+
+        # Set title to site ID and date
+        axs[ii].set_title(f'{site_id} - {date_str}', fontsize=10)  # Title with site ID and date
+
+        # Logging the PGV
+        pgv = np.max(np.abs(stream[ii].data))
+        pgvs.append(pgv)
+
+        # Plotting time history
+        axs[ii].plot(stream[ii].times(), stream[ii].data, label='Full Time History')
+
+        # Making Subplot axis labels
+        axs[ii].set_xlabel('Time [s]', fontsize=8)
+        axs[ii].set_ylabel('Velocity [cm/s]', fontsize=8)
+
+        # Gridlines
+        axs[ii].grid(which='both', color='gray', linestyle='-', linewidth=0.25)
+
+        # Adding the PGVs
+        axs[ii].text(0.95, 0.95, f'Max: {pgv:.2f} cm/s', transform=axs[ii].transAxes,
+                     fontsize=8, verticalalignment='top', horizontalalignment='right',
+                     bbox=dict(facecolor='white', alpha=0.5))
+
+    # Hide excess subplots
+    for ax in axs[n_subplots:]:
+        ax.set_visible(False)
+
+    # Adjust layout
+    plt.tight_layout(rect=[0, 0, 1, 0.96])  # Make space for the suptitle
+    plt.subplots_adjust(top=0.92, bottom=0.08, left=0.10, right=0.95, hspace=0.5, wspace=0.5)
+
+    # Title
+    plt.suptitle(f'Velocity Time Histories')
+
+    # Show the plot
+    plt.show()
+
+def plotstream_minimal(stream):
+    if not stream:
+        print("The stream is empty.")
+        return
+
+    n_subplots = len(stream)
+    n_cols = int(np.ceil(np.sqrt(n_subplots)))
+    n_rows = int(np.ceil(n_subplots / n_cols))
+
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(15, 10))
+
+    if n_rows > 1 or n_cols > 1:
+        axs = axs.flatten()
+    else:
+        axs = [axs]
+
+    pgas = []
+
+    for ii in range(len(stream)):
+        pga = np.max(np.abs(stream[ii].data))
+        pgas.append(pga)
+
+        axs[ii].plot(stream[ii].times(), stream[ii].data, label='Full Time History')
+
+        axs[ii].text(0.95, 0.95, f'Max: {pga:.4f} g', transform=axs[ii].transAxes,
+                     fontsize=8, verticalalignment='top', horizontalalignment='right',
+                     bbox=dict(facecolor='white', alpha=0.5))
+        axs[ii].set_xticks([])
+        axs[ii].set_yticks([])
+
+    for ax in axs[n_subplots:]:
+        ax.set_visible(False)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.subplots_adjust(top=0.92, bottom=0.08, left=0.10, right=0.95, hspace=0.5, wspace=0.5)
+    plt.suptitle(f'Time Histories; Demeaned and Linear Detrend')
+
+    plt.show()
+
+def plotstream_vels_minimal(stream):
+    if not stream:
+        print("The stream is empty.")
+        return
+
+    n_subplots = len(stream)
+    n_cols = int(np.ceil(np.sqrt(n_subplots)))
+    n_rows = int(np.ceil(n_subplots / n_cols))
+
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(15, 10))
+
+    if n_rows > 1 or n_cols > 1:
+        axs = axs.flatten()
+    else:
+        axs = [axs]
+
+    pgvs = []
+
+    for ii in range(len(stream)):
+        pgv = np.max(np.abs(stream[ii].data))
+        pgvs.append(pgv)
+
+        axs[ii].plot(stream[ii].times(), stream[ii].data, label='Full Time History')
+
+        axs[ii].text(0.95, 0.95, f'Max: {pgv:.2f} cm/s', transform=axs[ii].transAxes,
+                     fontsize=8, verticalalignment='top', horizontalalignment='right',
+                     bbox=dict(facecolor='white', alpha=0.5))
+        axs[ii].set_xticks([])
+        axs[ii].set_yticks([])
+
+    for ax in axs[n_subplots:]:
+        ax.set_visible(False)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.subplots_adjust(top=0.92, bottom=0.08, left=0.10, right=0.95, hspace=0.5, wspace=0.5)
+    plt.suptitle(f'Velocity Time Histories')
+
+    plt.show()
+
 
