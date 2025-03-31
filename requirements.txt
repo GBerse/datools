@@ -1,0 +1,14 @@
+--index-url https://pypi.python.org/simple/
+
+matplotlib
+pandas
+numpy
+pandas
+scipy
+
+
+# Install pykooh from GitHub (latest master/main branch)
+git+https://github.com/arkottke/pykooh.git
+
+# Install pystrata from GitHub (latest master/main branch)
+git+https://github.com/arkottke/pystrata.git
