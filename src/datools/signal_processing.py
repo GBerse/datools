@@ -898,7 +898,7 @@ def plotstream(stream):
     plt.subplots_adjust(top=0.92, bottom=0.08, left=0.10, right=0.95, hspace=0.5, wspace=0.5)
 
     # Title
-    plt.suptitle(f'Time Histories)')
+    plt.suptitle(f'Time Histories')
 
     # Show the plot
     plt.show()
