@@ -95,6 +95,7 @@ def genstream(dir, ext):
             for trace in file_stream:
                 trace.stats.filename = filename
                 stream += trace
+    print(f"Total traces combined: {len(stream)}")
 
     return stream
 
