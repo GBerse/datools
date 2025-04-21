@@ -16,6 +16,32 @@ import re
 # Building profiles and motions
 # ------------------
 
+def read_MSEED(path):
+    """
+    Creates an Obspy Stream object from ground motions in a given directory
+
+    Parameters:
+    ----------
+    - dir: path folder w/motions (MSEED).
+    - ext: extension name of the files you are creating a Stream from.
+
+     Returns
+    ----------
+    - stream: constructed 
+    """
+    stream = Stream()
+    for filename in os.listdir(path):
+        if filename.endswith('.MSEED'):
+            file_path = os.path.join(path, filename)
+            current_stream = read(file_path)
+            for trace in current_stream:
+                clean_filename = filename.replace('.MSEED', '')
+                trace.stats.filename = clean_filename 
+
+            stream += current_stream
+    print(f"Total traces combined: {len(stream)}")
+    return stream
+
 def create_soil_profile(uw, PI, OCR, mean_stress, thick, vs, sf, df=None):
     """
     Create a soil profile using pystrata based on specified parameters.
@@ -425,3 +451,293 @@ def plot_transfer_functions(base_small_df, surface_small_df, base_large_df, surf
         base_small_df, surface_small_df, base_large_df, surface_large_df = process_profile(profile_name, profile, mp, freqs)
         plot_transfer_functions(base_small_df, surface_small_df, base_large_df, surface_large_df, profile_name, freqs)
     """
+
+
+# ------------------
+# MRD curve plotting
+# ------------------
+
+from functools import wraps
+import matplotlib.pyplot as plt
+
+def accepts_axis(func):
+    """Decorator to add axis parameter support to plotting functions"""
+    @wraps(func)
+    def wrapper(profile, ax=None, **kwargs):
+        if ax is None:
+            fig, ax = plt.subplots(figsize=kwargs.pop('figsize', (10, 7)))
+            standalone = True
+        else:
+            standalone = False
+        
+        # Call the original function with axis support
+        func(profile, ax=ax, **kwargs)
+        
+        if standalone:
+            plt.show()
+    return wrapper
+
+@accepts_axis
+def plot_damping_curve(profile, ax=None, **kwargs):
+    for i, layer in enumerate(profile.layers):
+        if layer.soil_type.mod_reduc is not None:
+            strains = layer.soil_type.damping.strains * 100
+            damping = layer.soil_type.damping.values * 100
+            ax.plot(strains, damping, 
+                   label=f'Layer {i+1}: Vs = {layer.initial_shear_vel} m/s')
+
+    ax.set(xscale='log', xlim=(0.0001, 10), ylim=(0, 20),
+           xlabel="Shear Strain [%]", ylabel="Damping [%]",
+           title="Damping Curve")
+    ax.grid(True, which="both", ls="--")
+    ax.legend()
+
+@accepts_axis
+def plot_mrd_curve(profile, ax=None, **kwargs):
+    for i, layer in enumerate(profile.layers):
+        if layer.soil_type.mod_reduc is not None:
+            strains = layer.soil_type.mod_reduc.strains * 100
+            mod_reduc = layer.soil_type.mod_reduc.values
+            ax.plot(strains, mod_reduc,
+                   label=f'Layer {i+1}: Vs = {layer.initial_shear_vel} m/s')
+
+    ax.set(xscale='log', ylim=(0, 1),
+           xlabel="Shear Strain [%]", ylabel="Modulus Reduction [G/Gmax]",
+           title="Modulus Reduction Curve(s)")
+    ax.grid(True, which="both", ls="--")
+    ax.legend()
+
+
+
+def cap_max_damping(profile, max_damping=0.15, layer_range=None):
+
+    """
+    Cap the damping values of soil layers at a specified maximum damping value.
+    
+    Parameters:
+    - profile: The soil profile containing layers
+    - max_damping: Maximum allowable damping value (default 0.15)
+    - layer_range: Optional tuple (start, end) of layer indices to process. 
+                   If None, processes all layers.
+    """
+    total_layers = len(profile.layers)
+    
+    # Determine which layers to process
+    if layer_range is None:
+        # Process all layers if no range is specified
+        start_idx = 0
+        end_idx = total_layers
+    else:
+        # Process specified range
+        start_idx, end_idx = layer_range
+        # Ensure indices are within bounds
+        start_idx = max(0, start_idx)
+        end_idx = min(total_layers, end_idx)
+    
+    for i in range(start_idx, end_idx):
+        layer = profile.layers[i]
+        if layer.soil_type.mod_reduc is not None:
+            damping = layer.soil_type.damping.values
+            
+            # Cap the damping at the maximum damping value
+            adjusted_damping = np.clip(damping, None, max_damping)
+            
+            # Update the damping values in the layer's damping curve
+            layer.soil_type.damping.values = adjusted_damping
+            
+            print(f"Layer {i+1}: Damping values capped at {max_damping * 100}%.")
+    return profile
+
+
+
+
+
+
+
+def strain_levels_fdm(ts,profile):
+    import copy
+    from matplotlib.lines import Line2D
+    from pystrata.propagation import EquivalentLinearCalculator, FrequencyDependentEqlCalculator
+    import pykooh
+
+    # Ensure you have defined 'ts' (time series) and 'profile' (soil profile)
+    # ts = Your motion object
+    # profile = Your soil profile object
+
+    # Define calculators
+
+    #profile = profile_adjusted
+    calcs = [
+        ("EQL", EquivalentLinearCalculator()),
+        ("FDM (ZR)", FrequencyDependentEqlCalculator(method='zr15')),
+        ("FDM (Ko 20)", FrequencyDependentEqlCalculator(method='ko:20')),
+    ]
+
+    # Define colors and linestyles for calculators
+    calculator_linestyles = [':', '-', '-']
+    calculator_linewidths = [3, 3, 3]
+    calculator_colors = ['blue', 'green', 'red']
+
+    # Prepare legend handles
+    calc_lines = []
+    for calc_idx, (calc_name, _) in enumerate(calcs):
+        line = Line2D([0], [0],
+                    linestyle=calculator_linestyles[calc_idx],
+                    color=calculator_colors[calc_idx],
+                    linewidth=calculator_linewidths[calc_idx],
+                    label=calc_name)
+        calc_lines.append(line)
+
+    # Loop through each layer in the profile and generate separate plots
+    for layer_idx, original_layer in enumerate(profile[:-1]):
+        # Create a deep copy of the profile for each layer
+        profile_copy = copy.deepcopy(profile)
+        for layer in profile_copy:
+            layer.reset()
+            if layer.strain is None:
+                layer.strain = 0.0
+
+        # Initialize a plot for this layer
+        plt.figure(figsize=(12, 6))
+        plt.title(f"Strain Fourier Amplitude Spectrum [Layer {layer_idx + 1}]", fontsize=26)
+
+        # Process each calculator
+        for calc_idx, (calc_name, calc) in enumerate(calcs):
+            calc(ts,profile_copy, profile_copy.location("within", index=-1))
+            layer = profile_copy[layer_idx]
+            strains = layer.strain * 100  # Convert to percentage
+
+            # Apply smoothing to ZR strains
+            if calc_name == "FDM (ZR)":
+                temp_freqs = ts.freqs
+                smoothed_strains = pykooh.smooth(temp_freqs, temp_freqs, strains, b=20)
+                plt.plot(temp_freqs, smoothed_strains,
+                            linestyle='-', linewidth=3, color='black',
+                            label="ZR [ko=20]")
+                #  continue
+
+            # Check if strains are scalar (EQL) or array (frequency-dependent)
+            if np.isscalar(strains):
+                strains = np.full_like(ts.freqs, strains)
+
+            # Plot the original strains for this calculator
+            plt.plot(ts.freqs, strains,
+                    linestyle=calculator_linestyles[calc_idx],
+                    linewidth=calculator_linewidths[calc_idx],
+                    color=calculator_colors[calc_idx],
+                    label=calc_name)
+
+        # Customize the plot
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.xlabel('Frequency (Hz)', fontsize=16)
+        plt.ylabel('Strain [%]', fontsize=16)
+        plt.grid(True, which="both", linestyle="--", linewidth=0.5)
+        plt.ylim(1e-6, 10)
+        plt.xlim(0.01, 100)
+
+        # Add legend
+        plt.legend(title='Calculators', fontsize=12, title_fontsize=14)
+
+        # Adjust and save the plot
+        plt.tight_layout()
+        plt.show() 
+
+
+
+
+def strain_levels_fdm_simple(ts,profile):
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import copy
+    from matplotlib.lines import Line2D
+    from pystrata.propagation import EquivalentLinearCalculator, FrequencyDependentEqlCalculator
+    import pykooh
+    # Define calculators
+    calcs = [
+        ("EQL", EquivalentLinearCalculator()),
+        ("FDM (ZR)", FrequencyDependentEqlCalculator(method='zr15')),
+        ("FDM (ko = 20)", FrequencyDependentEqlCalculator(method='ko:20')),
+    ]
+
+    # Define colors and linestyles for calculators
+    calculator_linestyles = [':', '-', '-']
+    calculator_linewidths = [3, 3, 3]
+    calculator_colors = ['blue', 'green', 'red']
+
+    # Prepare legend handles
+    calc_lines = []
+    for calc_idx, (calc_name, _) in enumerate(calcs):
+        line = Line2D([0], [0],
+                    linestyle=calculator_linestyles[calc_idx],
+                    color=calculator_colors[calc_idx],
+                    linewidth=calculator_linewidths[calc_idx],
+                    label=calc_name)
+        calc_lines.append(line)
+
+    # Create a figure with 3 rows and 2 columns
+    fig, axes = plt.subplots(3, 2, figsize=(16, 16), sharex=True, sharey=True)
+    fig.suptitle("Strain Fourier Amplitude Spectrum [within] ", fontsize=32)
+    axes = axes.flatten()  # Flatten to make iterating easier
+
+    # Loop through each layer and plot
+    num_layers = len(profile) - 1  # Total layers to plot
+    for layer_idx, original_layer in enumerate(profile[:-1]):
+        ax = axes[layer_idx]  # Select subplot by layer index
+
+        # Create a deep copy of the profile for each layer
+        profile_copy = copy.deepcopy(profile)
+        for layer in profile_copy:
+            layer.reset()
+            if layer.strain is None:
+                layer.strain = 0.0
+
+        # Process each calculator
+        for calc_idx, (calc_name, calc) in enumerate(calcs):
+            calc(ts, profile_copy, profile_copy.location("within", index=-1))
+            layer = profile_copy[layer_idx]
+            strains = layer.strain * 100  # Convert to percentage
+
+            # Apply smoothing to ZR strains
+            if calc_name == "FDM (ZR)":
+                temp_freqs = ts.freqs
+                smoothed_strains = pykooh.smooth(temp_freqs, temp_freqs, strains, b=40)
+                ax.plot(temp_freqs, smoothed_strains,
+                        linestyle='-', linewidth=3, color='green',
+                        label="ZR [ko = 40]")
+                continue
+
+            # Check if strains are scalar (EQL) or array (frequency-dependent)
+            if np.isscalar(strains):
+                strains = np.full_like(ts.freqs, strains)
+
+            # Plot the original strains for this calculator
+            ax.plot(ts.freqs, strains,
+                    linestyle=calculator_linestyles[calc_idx],
+                    linewidth=calculator_linewidths[calc_idx],
+                    color=calculator_colors[calc_idx],
+                    label=calc_name)
+
+        # Customize each subplot
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.set_xlim(0.01, 100)
+        ax.set_ylim(1e-6, 10)
+        ax.set_title(f"Layer {layer_idx + 1}", fontsize=18)
+        ax.grid(True, which="both", linestyle="--", linewidth=0.5)
+        ax.set_ylabel('Strain [%]', fontsize =16)
+        ax.set_xlabel('Frequency [Hz]', fontsize =16)
+
+
+    # Remove empty subplots if the number of layers is less than 6
+    for empty_idx in range(num_layers, len(axes)):
+        fig.delaxes(axes[empty_idx])
+
+
+
+    # Add legend to the first subplot
+    axes[0].legend(title='Calculators', fontsize=12, title_fontsize=14, loc='upper right')
+
+    # Adjust layout
+    plt.tight_layout(rect=[0, 0, 1, 0.96])  # Leave space for the main title
+    plt.show()

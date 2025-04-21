@@ -1007,7 +1007,7 @@ def plotstream_minimal(stream):
 
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.subplots_adjust(top=0.92, bottom=0.08, left=0.10, right=0.95, hspace=0.5, wspace=0.5)
-    plt.suptitle(f'Time Histories; Demeaned and Linear Detrend')
+    plt.suptitle(f'Time Historie(s)')
 
     plt.show()
 
