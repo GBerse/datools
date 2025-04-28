@@ -3,9 +3,9 @@
 These examples are used to illustrate the function of this library.
 
 
-1. Processing Raw Kik-Net ground motion files for future site response analysis.
-2. Finding the HVSR, empirical transfer function, linear elastic transfer function, and response spectrum for several Kik-Net sites simultaneously. 
-3. Calculating kappa and the subsequent kappa scale factor for Darendeli Dmin.
-4. Calculating the ground motion parameter based scale factor for Darendeli Dmin.
-5. Conducting strength correction on a site profile ("fitting alpha method").
-5. Conducting a frequency-dependent equivalent linear site response analysis on multiple sites.
+1. Signal Processing -- downloading motions from Kik-Net and processing them for future site response analysis
+2. Small-Strain Site Response -- conducting linear elastic site response analyses on multiple sites concurrently.
+3. $D_{min}$ Scale Factor (kappa-based) -- calculating kappa and the subsequent kappa scale factor for Darendeli Dmin.
+4. $D_{min}$ Scale Factor (ground motion parameter based) -- calculating the ground motion parameter based scale factor for Darendeli Dmin.
+5. Modulus Reduction and Damping Curve (MRD) Adjustments -- incorporating $D_{min}$ scale factors, strength correction, and damping capping into MRD curves.
+5. Equivalent Linear Elastic-Frequency Dependent Site Response (EQL-FD) -- how to conduct an EQL-FD analysis in pyStrata.

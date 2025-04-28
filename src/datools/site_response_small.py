@@ -11,6 +11,11 @@ import pandas as pd
 import re
 
 
+from typing import Sequence, Literal
+from pystrata.site import Layer, NonlinearProperty
+import scipy
+
+
 
 # ------------------
 # Building profiles and motions
@@ -741,3 +746,113 @@ def strain_levels_fdm_simple(ts,profile):
     # Adjust layout
     plt.tight_layout(rect=[0, 0, 1, 0.96])  # Leave space for the main title
     plt.show()
+
+
+# ------------------
+# Strength Correction
+# ------------------
+
+def view_layer(
+    layer: Layer,
+    *,
+    show: Literal["all", "modulus", "damping", "none"] = "none",   # <-- default is now "none"
+    strains: Sequence[float] | None = None,
+) -> None:
+    #Basic Soil info
+    print(f"{'Attribute':20s} | Value")
+    print("-" * 40)
+    print(f"{'thickness':20s} | {layer.thickness:.3f} m")
+    print(f"{'unit_weight':20s} | {layer.unit_wt:.3f} kN/m³")
+    print(f"{'Vs (current)':20s} | {layer.shear_vel:.3f} m/s")
+    print(f"{'Gmax (small-strain)':20s} | {layer.initial_shear_mod:.3f} kPa")
+    sm = getattr(layer.soil_type, "_stress_mean", None)
+    if sm is not None:
+        print(f"{'σₘ':20s} | {sm:.3f} kPa")
+
+    #MRD
+    mod_prop = layer.soil_type.mod_reduc
+    if show in ("all", "modulus") and isinstance(mod_prop, NonlinearProperty):
+        print("\nModulus-reduction curve (γ → G/Gmax):")
+        for γ, gg in zip(mod_prop.strains, mod_prop.values):
+            print(f"  {γ:.2e} | {gg:.3f}")
+        if strains:
+            print("\nSelected strains (G/Gmax):")
+            for γ in strains:
+                print(f"  {γ:.2e} | {mod_prop(γ):.3f}")
+
+    #DAMPing
+    damp_prop = layer.soil_type.damping
+    if show in ("all", "damping") and isinstance(damp_prop, NonlinearProperty):
+        print("\nDamping curve (γ → ζ):")
+        for γ, ζ in zip(damp_prop.strains, damp_prop.values):
+            print(f"  {γ:.2e} | {ζ:.3f}")
+        if strains:
+            print("\nSelected strains (damping ratio):")
+            for γ in strains:
+                print(f"  {γ:.2e} | {damp_prop(γ):.3f}")
+
+
+def strength_correction(soil_prop,target,strains=None):
+    """
+    Inputs
+    -------------------------------
+
+    """
+    KPA_TO_ATM = scipy.constants.kilo / scipy.constants.atm
+    Gmax = soil_prop.initial_shear_mod 
+    
+    soil = soil_prop.soil_type
+    plas_index = getattr(soil, '_plas_index', None)
+    ocr        = getattr(soil, '_ocr', None)
+    mean_pres  = getattr(soil, '_stress_mean', None) 
+
+    a1 = 0.92
+    ref_str = ((0.0352 + 0.0010 * plas_index * ocr**0.3246)
+               * (mean_pres * KPA_TO_ATM) ** 0.3483) / 100
+
+    if strains is None:
+        strains = soil_prop.soil_type.mod_reduc.strains
+    
+    if np.isscalar(target):
+        target = target  #if given the target strength as single value
+    else:
+        raise ValueError("tau_target must either be a scalar or an array of size 2")
+ 
+    
+    print('Reference Strain [%]:', ref_str*100)   
+    Gratio_target = target / (Gmax * strains[-1])
+    a2 = np.log(1 / Gratio_target - 1) / np.log(strains[-1] / ref_str)   
+
+    Gratio = []
+    Gratio = np.where(
+    strains <= ref_str,
+    1 / (1 + (strains / ref_str)**a1),
+    1 / (1 + (strains / ref_str)**a2)
+        )
+    tau = Gmax * Gratio * strains          # kN/m²   (τ = G · γ)
+    return strains, Gratio, tau, a2
+
+
+def set_modulus_reduction(layer, *, strains, g_over_gmax):
+    """
+    Replace G/Gmax curve for a single Layer *in-place*.
+    """
+    # Ensure numpy arrays and matching length
+    strains = np.asarray(strains, float)
+    g_over_gmax = np.asarray(g_over_gmax, float)
+    if strains.size != g_over_gmax.size:
+        raise ValueError("strains and g_over_gmax must be the same length")
+
+    prop = layer.soil_type.mod_reduc
+    if isinstance(prop, NonlinearProperty):
+        # Use the built-in setters ➜ interpolation is rebuilt automatically :contentReference[oaicite:0]{index=0}
+        prop.strains = strains
+        prop.values  = g_over_gmax
+    else:
+        # Layer was linear before—make it nonlinear
+        layer.soil_type.mod_reduc = NonlinearProperty(
+            name=f"{layer.soil_type.name} (custom)",
+            strains=strains,
+            values=g_over_gmax,
+            param="mod_reduc",
+        )
