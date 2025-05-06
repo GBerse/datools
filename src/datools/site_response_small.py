@@ -319,9 +319,8 @@ def convert_to_motion(traces, sc):
 # Empirical Transfer Function Creations
 # ------------------
 
-def create_output_collection(freqs=None):
-    if freqs is None:
-        freqs = np.logspace(-1, 2, num=500)
+def create_output_collection(freqs):
+    """Return a one‑item OutputCollection with a consistent frequency grid."""
     return pystrata.output.OutputCollection([
         pystrata.output.FourierAmplitudeSpectrumOutput(
             freqs=freqs,
@@ -386,7 +385,7 @@ def plot_transfer_functions(base_small_df, surface_small_df, base_large_df, surf
     plt.figure(figsize=(10, 6))
 
     # Small-Strain Transfer Functions (Grey)
-    small_strain_ratio = surface_small_df / base_small_df
+    small_strain_ratio = surface_small_df / base_small_df    
     for col in small_strain_ratio.columns:
         plt.plot(freqs, small_strain_ratio[col], color='grey', alpha=0.3)
 
@@ -443,7 +442,7 @@ def plot_transfer_functions(base_small_df, surface_small_df, base_large_df, surf
     plt.ylabel('Transfer Function')
     plt.xlim(0.2, 40)
     plt.ylim(0.1, 100)
-    plt.title(f'Small and Large-Strain Empirical Transfer Functions - {profile_name}')
+    plt.title(f'Empirical Transfer Functions - {profile_name}')
     plt.legend()
     plt.grid(True, which='both', linestyle='--', linewidth=0.5)
     plt.show()

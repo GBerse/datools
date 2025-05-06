@@ -30,4 +30,4 @@ The library is composed of two main components:
 ## Installation
 `datools` is not available yet on PyPI; installation will need to be done instead with:
 ```bash
-pip install https://github.com/GBerse/datools
+pip install git+https://github.com/GBerse/datools
